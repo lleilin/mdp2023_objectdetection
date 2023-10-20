@@ -25,4 +25,4 @@ python3 main.py
 ## Output
 Annotated video frames are displayed in real-time with detected objects.
 If an object is detected, audio recording starts, and the recorded audio is saved as "audio_output.wav" in the script's directory.
-Press 'q' to exit the script gracefully.
+To stop the script, press `Ctrl+C`.
