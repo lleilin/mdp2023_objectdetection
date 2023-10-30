@@ -3,6 +3,8 @@ import numpy as np
 from ultralytics import YOLO
 import pyaudio
 import wave
+import threading
+import time
 
 # Initialize the YOLO model
 model = YOLO("best.pt")
@@ -16,8 +18,22 @@ seconds = 5
 
 p = pyaudio.PyAudio()
 
-# Function to record audio
+# Create a thread for audio recording
+audio_thread = None
+
+# Flag to indicate whether audio recording is in progress
+is_recording = False
+
+# Frame counter and threshold to stop recording
+frame_counter = 0
+stop_threshold = 10
+
+# Function to record audio with a unique filename
 def record_audio(output_filename):
+    global is_recording
+    global frame_counter
+    is_recording = True
+
     stream = p.open(format=sample_format,
                     channels=channels,
                     rate=fs,
@@ -27,7 +43,8 @@ def record_audio(output_filename):
     frames = []
 
     print("Recording...")
-    for _ in range(0, int(fs / chunk * seconds)):
+    # for _ in range(0, int(fs / chunk * seconds)):
+    while (frame_counter <= stop_threshold):
         data = stream.read(chunk)
         frames.append(data)
 
@@ -43,17 +60,38 @@ def record_audio(output_filename):
     wf.writeframes(b''.join(frames))
     wf.close()
 
+    is_recording = False
+
+# Function to start audio recording thread with a unique filename
+def start_audio_recording():
+    global audio_thread
+    if not is_recording:
+        current_time = time.strftime("%Y%m%d-%H%M%S")
+        audio_filename = f"audio_{current_time}.wav"
+        audio_thread = threading.Thread(target=record_audio, args=(audio_filename,))
+        audio_thread.start()
+
 # Main function
 def main():
+    global frame_counter
     for result in model.track(source=0, show=True, stream=True, agnostic_nms=True, save_crop=True):
         if len(result):
             print("DETECTED")
-
-            # Start recording audio
-            record_audio("detected_audio.wav")
-
-if __name__ == "__main__":
-    main()
+            frame_counter = 0  # Reset the frame counter when a face is detected
+            # Start recording audio in a separate thread
+            start_audio_recording()
+        else:
+            frame_counter += 1  # Increment the frame counter
 
 # Terminate the audio stream
-p.terminate()
+def terminate_audio_stream():
+    global audio_thread
+    if audio_thread:
+        audio_thread.join()  # Wait for the audio recording thread to finish
+    p.terminate()
+
+if __name__ == "__main__":
+    try:
+        main()
+    finally:
+        terminate_audio_stream()
