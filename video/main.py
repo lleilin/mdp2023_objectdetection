@@ -1,13 +1,13 @@
-import cv2
-import numpy as np
 from ultralytics import YOLO
 import pyaudio
 import wave
 import threading
 import time
+import sys
+
 
 # Initialize the YOLO model
-model = YOLO("best.pt")
+model = YOLO("yolov8n-face.pt")
 
 # Initialize the audio recording settings
 chunk = 1024
@@ -28,23 +28,26 @@ is_recording = False
 frame_counter = 0
 stop_threshold = 10
 
+
 # Function to record audio with a unique filename
 def record_audio(output_filename):
     global is_recording
     global frame_counter
     is_recording = True
 
-    stream = p.open(format=sample_format,
-                    channels=channels,
-                    rate=fs,
-                    frames_per_buffer=chunk,
-                    input=True)
+    stream = p.open(
+        format=sample_format,
+        channels=channels,
+        rate=fs,
+        frames_per_buffer=chunk,
+        input=True,
+    )
 
     frames = []
 
     print("Recording...")
     # for _ in range(0, int(fs / chunk * seconds)):
-    while (frame_counter <= stop_threshold):
+    while frame_counter <= stop_threshold:
         data = stream.read(chunk)
         frames.append(data)
 
@@ -53,14 +56,15 @@ def record_audio(output_filename):
     stream.stop_stream()
     stream.close()
 
-    wf = wave.open(output_filename, 'wb')
+    wf = wave.open(output_filename, "wb")
     wf.setnchannels(channels)
     wf.setsampwidth(p.get_sample_size(sample_format))
     wf.setframerate(fs)
-    wf.writeframes(b''.join(frames))
+    wf.writeframes(b"".join(frames))
     wf.close()
 
     is_recording = False
+
 
 # Function to start audio recording thread with a unique filename
 def start_audio_recording():
@@ -71,10 +75,16 @@ def start_audio_recording():
         audio_thread = threading.Thread(target=record_audio, args=(audio_filename,))
         audio_thread.start()
 
+
 # Main function
 def main():
     global frame_counter
-    for result in model.track(source=0, show=True, stream=True, agnostic_nms=True, save_crop=True):
+    source = 0
+    if len(sys.argv) > 1:
+        source = sys.argv[1]
+    for result in model.track(
+        source=source, show=True, stream=True, agnostic_nms=True, save_crop=True, classes=0
+    ):
         if len(result):
             print("DETECTED")
             frame_counter = 0  # Reset the frame counter when a face is detected
@@ -82,6 +92,9 @@ def main():
             start_audio_recording()
         else:
             frame_counter += 1  # Increment the frame counter
+                
+    frame_counter = 11
+
 
 # Terminate the audio stream
 def terminate_audio_stream():
@@ -89,6 +102,7 @@ def terminate_audio_stream():
     if audio_thread:
         audio_thread.join()  # Wait for the audio recording thread to finish
     p.terminate()
+
 
 if __name__ == "__main__":
     try:
